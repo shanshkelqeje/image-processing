@@ -1,18 +1,19 @@
 var img;
-// var colourChannels = [];
-// var thresholdSliders = [];
+var colourChannels = [];
+var thresholdSliders = [];
 
 function preload() {
     img = loadImage("assets/leaf.jpg");
 }
 
 function setup() {
-    createCanvas(900, 600);
+    createCanvas(900, 900);
     pixelDensity(1);
 
     grayscaleImg = grayscaleFilter(img);
-    // splitColourChannels(img);
-    // setupThresholdSliders(colourChannels);
+    splitColourChannels(img);
+    setupThresholdSliders(colourChannels);
+    YCbCrImg = RGBToYCbCr(img);
     hsvImg = RGBToHSV(img);
     labImg = RGBToLab(img);
 }
@@ -22,19 +23,63 @@ function draw() {
 
     image(img, 0, 0, 160, 120);
     image(grayscaleImg, 160 + 20, 0, 160, 120);
-    // for (let i = 0; i < colourChannels.length; i++) {
-    //     image(colourChannels[i], (160 + 20) * i, 120 + 20, 160, 120);
-    //     image(
-    //         thresholdFilter(colourChannels[i], thresholdSliders[i]),
-    //         (160 + 20) * i,
-    //         240 + 40,
-    //         160,
-    //         120
-    //     );
-    // }
+    for (let i = 0; i < colourChannels.length; i++) {
+        image(colourChannels[i], (160 + 20) * i, 120 + 20, 160, 120);
+        image(
+            thresholdFilter(colourChannels[i], thresholdSliders[i]),
+            (160 + 20) * i,
+            240 + 40,
+            160,
+            120
+        );
+    }
     image(img, 0, 360 + 80, 160, 120);
-    image(hsvImg, 160 + 20, 360 + 80, 160, 120);
-    image(labImg, 320 + 40, 360 + 80, 160, 120);
+    image(YCbCrImg, 160 + 20, 360 + 80, 160, 120);
+    image(hsvImg, 320 + 40, 360 + 80, 160, 120);
+    image(labImg, 480 + 60, 360 + 80, 160, 120);
+    image(img, 0, 480 + 100, 160, 120);
+    image(img, 160 + 20, 480 + 100, 160, 120);
+    image(img, 320 + 40, 480 + 100, 160, 120);
+}
+
+function RGBToYCbCr(img) {
+    var YCbCrImage = createImage(img.width, img.height);
+    img.loadPixels();
+    YCbCrImage.loadPixels();
+
+    for (let x = 0; x < img.width; x++) {
+        for (let y = 0; y < img.height; y++) {
+            let index = (img.width * y + x) * 4;
+            let r = img.pixels[index];
+            let g = img.pixels[index + 1];
+            let b = img.pixels[index + 2];
+            let a = img.pixels[index + 3];
+
+            let Y = 0.299 * r + 0.587 * g + 0.114 * b;
+            let Cb = -0.169 * r - 0.331 * g + 0.5 * b + 128;
+            let Cr = 0.5 * r - 0.419 * g - 0.081 * b + 128;
+
+            console.log("Y: " + Y);
+            console.log("Cb: " + Cb);
+            console.log("Cr: " + Cr);
+
+            let newR = map(Y, 16, 235, 0, 255);
+            let newG = map(Cb, 16, 240, 0, 255);
+            let newB = map(Cr, 16, 240, 0, 255);
+
+            console.log("R " + newR);
+            console.log("G " + newG);
+            console.log("B " + newB);
+
+            YCbCrImage.pixels[index] = newR;
+            YCbCrImage.pixels[index + 1] = newG;
+            YCbCrImage.pixels[index + 2] = newB;
+            YCbCrImage.pixels[index + 3] = a;
+        }
+    }
+
+    YCbCrImage.updatePixels();
+    return YCbCrImage;
 }
 
 function RGBToLab(img) {
@@ -56,51 +101,49 @@ function RGBToLab(img) {
             b /= 255;
 
             // Apply gamma correction (sRGB to Linear RGB)
-            function gammaCorrection(c) {
-                return c <= 0.04045
-                    ? c / 12.92
-                    : Math.pow((c + 0.055) / 1.055, 2.4);
+            function gammaCorrection(V) {
+                if (V <= 0.04045) return V / 12.92;
+                else return Math.pow((V + 0.055) / 1.055, 2.4);
             }
 
-            // r = gammaCorrection(r);
-            // g = gammaCorrection(g);
-            // b = gammaCorrection(b);
+            r = gammaCorrection(r);
+            g = gammaCorrection(g);
+            b = gammaCorrection(b);
 
-            // Convert Linear RGB to XYZ
+            // Convert RGB to XYZ
             let X = r * 0.4124564 + g * 0.3575761 + b * 0.1804375;
             let Y = r * 0.2126729 + g * 0.7151522 + b * 0.072175;
             let Z = r * 0.0193339 + g * 0.119192 + b * 0.9503041;
 
             // Reference white point (D65)
-            const Xn = 95.047,
-                Yn = 100.0,
-                Zn = 108.883;
+            const Xn = 0.95047;
+            const Yn = 1.0;
+            const Zn = 1.08883;
 
-            // Normalize XYZ
-            let Xr = X / Xn;
-            let Yr = Y / Yn;
-            let Zr = Z / Zn;
-
-            // Convert XYZ to Lab
+            // Convert XYZ to L*a*b*
             function f(t) {
                 if (t > 0.008856) return Math.pow(t, 1 / 3);
                 else return 7.787 * t + 16 / 116;
             }
 
             let lStar = 0;
-            if (Y > 0.008856) lStar = 116 * Math.pow(Y, 1 / 3) - 16;
-            else lStar = 903.3 * Y;
+            if (Y / Yn > 0.008856) lStar = 116 * Math.pow(Y / Yn, 1 / 3) - 16;
+            else lStar = 903.3 * (Y / Yn);
 
-            let aStar = 500 * (f(X) - f(Y));
-            let bStar = 200 * (f(Y) - f(Z));
+            let aStar = 500 * (f(X / Xn) - f(Y / Yn));
+            let bStar = 200 * (f(Y / Yn) - f(Z / Zn));
 
-            console.log("L*: " + lStar);
-            console.log("a*: " + aStar);
-            console.log("b*: " + bStar);
+            console.log("L* " + lStar);
+            console.log("a* " + aStar);
+            console.log("b* " + bStar);
 
-            newR = map(lStar, 0, 100, 0, 255);
-            newG = map(aStar, -128, 127, 0, 255);
-            newB = map(bStar, -128, 127, 0, 255);
+            let newR = map(lStar, 0, 100, 0, 255);
+            let newG = map(aStar, -128, 127, 0, 255);
+            let newB = map(bStar, -128, 127, 0, 255);
+
+            console.log("R " + newR);
+            console.log("G " + newG);
+            console.log("B " + newB);
 
             labImage.pixels[index] = newR;
             labImage.pixels[index + 1] = newG;
@@ -183,11 +226,9 @@ function setupThresholdSliders(colourChannels) {
 
 function thresholdFilter(img, slider) {
     var thresholdImage = createImage(img.width, img.height);
-    // Load pixel data into the pixels array so that we can read it
     img.loadPixels();
     thresholdImage.loadPixels();
 
-    // Threshold Filter
     for (let x = 0; x < img.width; x++) {
         for (let y = 0; y < img.height; y++) {
             let index = (img.width * y + x) * 4;
@@ -207,7 +248,7 @@ function thresholdFilter(img, slider) {
                 thresholdImage.pixels[index + 1] =
                 thresholdImage.pixels[index + 2] =
                     gray;
-            thresholdImage.pixels[index + 3] = a; // Set alpha channel
+            thresholdImage.pixels[index + 3] = a;
         }
     }
 
@@ -305,7 +346,7 @@ function grayscaleFilter(img) {
                 grayscaleImage.pixels[index + 1] =
                 grayscaleImage.pixels[index + 2] =
                     gray;
-            grayscaleImage.pixels[index + 3] = a; // Set alpha channel
+            grayscaleImage.pixels[index + 3] = a;
         }
     }
 
